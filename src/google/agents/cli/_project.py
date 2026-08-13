@@ -42,6 +42,8 @@ class ProjectConfig:
     session_type: str = "none"
     cicd_runner: str = "skip"
     agent_guidance_filename: str = "GEMINI.md"
+    egress_gateway: str | None = None
+    ingress_gateway: str | None = None
 
     @property
     def create_params(self) -> dict[str, Any]:
@@ -77,6 +79,9 @@ class ProjectConfig:
             "deployment_target", cfg.deployment_target
         )
         cfg.is_a2a = create_params.get("is_a2a", cfg.is_a2a)
+
+        cfg.egress_gateway = data.get("egress_gateway") or create_params.get("egress_gateway")
+        cfg.ingress_gateway = data.get("ingress_gateway") or create_params.get("ingress_gateway")
 
         return cfg
 

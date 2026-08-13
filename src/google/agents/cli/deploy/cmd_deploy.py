@@ -432,6 +432,16 @@ def _run_cloud_run_deploy_with_retry(args: list[str], *, project: str | None) ->
     default=None,
     help="VPC network name in the target project for DNS peering (Agent Runtime, requires --network-attachment).",
 )
+@click.option(
+    "--egress-gateway",
+    default=None,
+    help="Resource name of the egress Agent Gateway (agent-to-anywhere).",
+)
+@click.option(
+    "--ingress-gateway",
+    default=None,
+    help="Resource name of the ingress Agent Gateway (client-to-agent).",
+)
 def cmd_deploy(
     *,
     project,
@@ -462,6 +472,8 @@ def cmd_deploy(
     dns_peering_project,
     dns_peering_network,
     build_args,
+    egress_gateway,
+    ingress_gateway,
 ):
     """Deploy the agent.
 
@@ -489,6 +501,9 @@ def cmd_deploy(
       agents-cli deploy --status
     """
     cfg, has_manifest = _load_deploy_config(deployment_target)
+
+    egress_gateway = egress_gateway or cfg.egress_gateway
+    ingress_gateway = ingress_gateway or cfg.ingress_gateway
 
     region = region or cfg.region
     service_name = _resolve_deploy_service_name(cfg, service_name_override)
@@ -614,6 +629,10 @@ def cmd_deploy(
             for key, value in runtime_shape.items():
                 msg += f"\n  {key}: {value}"
             msg += "\n  (defaults apply on create; existing values preserved on update)"
+            if egress_gateway:
+                msg += f"\n  Egress Agent Gateway: {egress_gateway}"
+            if ingress_gateway:
+                msg += f"\n  Ingress Agent Gateway: {ingress_gateway}"
             if psc_interface_config:
                 msg += f"\n  PSC network attachment: {psc_interface_config['network_attachment']}"
                 for dc in psc_interface_config.get("dns_peering_configs", []):
@@ -634,6 +653,8 @@ def cmd_deploy(
             agent_identity=agent_identity,
             no_wait=no_wait,
             psc_interface_config=psc_interface_config,
+            egress_gateway=egress_gateway,
+            ingress_gateway=ingress_gateway,
             build_args=build_args,
             port=port,
             cpu=cpu,

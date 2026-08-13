@@ -364,6 +364,18 @@ def _packaged_files(root: Path) -> list[str]:
     return files
 
 
+def _qualify_agent_gateway(gateway: str, project: str, location: str) -> str:
+    """Ensure an Agent Gateway identifier is a fully qualified resource name.
+
+    If a short name is given (e.g., 'agw-ingress'), expands it to:
+    ``projects/{project}/locations/{location}/agentGateways/{gateway}``
+    """
+    gateway = gateway.strip()
+    if gateway.startswith("projects/"):
+        return gateway
+    return f"projects/{project}/locations/{location}/agentGateways/{gateway}"
+
+
 def deploy_agent_runtime(
     *,
     cfg: ProjectConfig,
@@ -384,6 +396,8 @@ def deploy_agent_runtime(
     agent_identity: bool = False,
     no_wait: bool = False,
     psc_interface_config: dict | None = None,
+    egress_gateway: str | None = None,
+    ingress_gateway: str | None = None,
     build_args: str | None = None,
     port: int | None = None,
 ) -> AgentEngine | None:
@@ -447,6 +461,9 @@ def deploy_agent_runtime(
         secrets=secrets,
         port=port,
     )
+
+    if egress_gateway:
+        env_vars.setdefault("GOOGLE_API_PREVENT_AGENT_TOKEN_SHARING_FOR_GCP_SERVICES", "False")
 
     # Initialize vertexai client
     http_options = {"api_version": "v1beta1"} if agent_identity else None
@@ -564,6 +581,10 @@ def deploy_agent_runtime(
         params.append(("Port", port))
     if build_args:
         params.append(("Build Args", build_args))
+    if egress_gateway:
+        params.append(("Egress Agent Gateway", egress_gateway))
+    if ingress_gateway:
+        params.append(("Ingress Agent Gateway", ingress_gateway))
     for name, value in params:
         click.echo(f"  {name}: {value}")
 
@@ -607,6 +628,20 @@ def deploy_agent_runtime(
 
     if psc_interface_config is not None:
         config_kwargs["psc_interface_config"] = psc_interface_config
+
+    agent_gateway_config: dict[str, Any] = {}
+    if egress_gateway:
+        agent_gateway_config["agent_to_anywhere_config"] = {
+            "agent_gateway": _qualify_agent_gateway(egress_gateway, project, location)
+        }
+    if ingress_gateway:
+        agent_gateway_config["client_to_agent_config"] = {
+            "agent_gateway": _qualify_agent_gateway(ingress_gateway, project, location)
+        }
+
+    if agent_gateway_config:
+        config_kwargs["agent_gateway_config"] = agent_gateway_config
+
 
     config = AgentEngineConfig(**config_kwargs)
 
@@ -708,6 +743,7 @@ def _start_deploy_operation(
         identity_type=config.identity_type,
         agent_framework=config.agent_framework,
         psc_interface_config=config.psc_interface_config,
+        agent_gateway_config=config.agent_gateway_config,
         image_spec=config.image_spec,
     )
 
